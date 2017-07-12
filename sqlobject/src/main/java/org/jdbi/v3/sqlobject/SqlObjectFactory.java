@@ -13,7 +13,13 @@
  */
 package org.jdbi.v3.sqlobject;
 
-import static java.util.Collections.synchronizedMap;
+import org.jdbi.v3.core.config.ConfigRegistry;
+import org.jdbi.v3.core.extension.ExtensionFactory;
+import org.jdbi.v3.core.extension.ExtensionMethod;
+import org.jdbi.v3.core.extension.HandleSupplier;
+import org.jdbi.v3.sqlobject.config.Configurer;
+import org.jdbi.v3.sqlobject.config.ConfiguringAnnotation;
+import org.jdbi.v3.sqlobject.internal.BatchableObject;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -29,12 +35,7 @@ import java.util.WeakHashMap;
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
-import org.jdbi.v3.core.config.ConfigRegistry;
-import org.jdbi.v3.core.extension.ExtensionFactory;
-import org.jdbi.v3.core.extension.ExtensionMethod;
-import org.jdbi.v3.core.extension.HandleSupplier;
-import org.jdbi.v3.sqlobject.config.Configurer;
-import org.jdbi.v3.sqlobject.config.ConfiguringAnnotation;
+import static java.util.Collections.synchronizedMap;
 
 /**
  * Creates implementations for SqlObject interfaces.
@@ -114,6 +115,12 @@ public class SqlObjectFactory implements ExtensionFactory {
             try {
                 handlers.putAll(handlerEntry((t, a, h) -> null, sqlObjectType, "finalize"));
             } catch (IllegalStateException expected) { } // optional implementation
+
+            if (Batchable.class.isAssignableFrom(sqlObjectType)) {
+                BatchableObject object = new BatchableObject();
+                handlers.putAll(handlerEntry((t, a, h) -> { object.beginBatch(); return null; }, Batchable.class, "beginBatch"));
+                handlers.putAll(handlerEntry((t, a, h) -> { object.endBatch(); return null; }, Batchable.class, "endBatch"));
+            }
 
             for (Method method : sqlObjectType.getMethods()) {
                 handlers.computeIfAbsent(method, m -> buildMethodHandler(sqlObjectType, m, registry, decorators));
